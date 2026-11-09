@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Админка</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<nav>
+  <a href="index.html">Главная</a>
+  <a href="studio.html">Студия</a>
+  <a href="questions.html">Анонимки</a>
+</nav>
+<main>
+  <h1>🛠️ Админка</h1>
+  <p class="sub">Только для тебя. Ключ хранится в Cloudflare, на странице не сохраняется.</p>
+
+  <div class="card">
+    <h2>Введи свой ключ</h2>
+    <input type="password" id="adminKey" placeholder="OWNER_KEY">
+    <button class="btn" onclick="saveKey()">Сохранить в этой сессии</button>
+    <p style="margin-top:8px;color:#888;font-size:0.8rem;">
+      Ключ хранится только в localStorage этого браузера.
+    </p>
+  </div>
+
+  <h2>Все вопросы (включая скрытые)</h2>
+  <div id="adminList"><div class="empty">Введи ключ, чтобы увидеть</div></div>
+</main>
+<script src="script.js"></script>
+<script>
+  let OWNER_KEY = localStorage.getItem('owner_key') || '';
+
+  function saveKey() {
+    OWNER_KEY = document.getElementById('adminKey').value.trim();
+    localStorage.setItem('owner_key', OWNER_KEY);
+    loadAdmin();
+  }
+
+  async function loadAdmin() {
+    if (!OWNER_KEY) return;
+    const list = document.getElementById('adminList');
+    try {
+      const res = await fetch('/api/questions?all=1', {
+        headers: { 'X-Owner-Key': OWNER_KEY }
+      });
+      if (!res.ok) {
+        list.innerHTML = '<div class="empty">Неверный ключ или ошибка</div>';
+        return;
+      }
+      const data = await res.json();
+      if (!data.length) {
+        list.innerHTML = '<div class="empty">Пока нет вопросов</div>';
+        return;
+      }
+      list.innerHTML = data.map(q => `
+        <div class="question" style="${q.is_visible ? '' : 'opacity:0.5;'}">
+          <div><b>#${q.id}</b> ${escapeHtml(q.text)}</div>
+          ${q.reply ? `<div class="q-reply"><strong>Твой ответ:</strong>${escapeHtml(q.reply)}</div>` : ''}
+          <div class="q-meta">
+            ${new Date(q.created_at).toLocaleString('ru-RU')}
+            ${q.is_visible ? ' · ✅ виден' : ' · 🚫 скрыт'}
+          </div>
+          <div style="margin-top:8px;">
+            <input id="reply-${q.id}" placeholder="Твой ответ..." value="${escapeHtml(q.reply || '')}">
+          </div>
+          <div class="admin-actions">
+            <button class="btn" onclick="reply(${q.id})">Ответить</button>
+            <button class="btn secondary" onclick="toggle(${q.id}, ${q.is_visible ? 0 : 1})">
+              ${q.is_visible ? 'Скрыть' : 'Опубликовать'}
+            </button>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      list.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+    }
+  }
+
+  async function reply(id) {
+    const replyText = document.getElementById('reply-' + id).value.trim();
+    const res = await fetch('/api/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Owner-Key': OWNER_KEY },
+      body: JSON.stringify({ id, reply: replyText })
+    });
+    if (res.ok) { toast('Ответ сохранён'); loadAdmin(); }
+    else toast('Ошибка');
+  }
+
+  async function toggle(id, visible) {
+    const res = await fetch('/api/moderate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Owner-Key': OWNER_KEY },
+      body: JSON.stringify({ id, is_visible: visible })
+    });
+    if (res.ok) { toast(visible ? 'Опубликовано' : 'Скрыто'); loadAdmin(); }
+    else toast('Ошибка');
+  }
+
+  if (OWNER_KEY) loadAdmin();
+</script>
+</body>
+</html>

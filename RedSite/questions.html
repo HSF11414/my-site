@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Анонимные вопросы</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<nav>
+  <a href="index.html">Главная</a>
+  <a href="studio.html">Студия</a>
+  <a href="questions.html">Анонимки</a>
+</nav>
+<main>
+  <h1>💬 Анонимные вопросы</h1>
+  <p class="sub">Задай вопрос — никто не узнает, кто его отправил. Я отвечу публично.</p>
+
+  <div class="card">
+    <h2>Задать вопрос</h2>
+    <textarea id="questionInput" rows="4" maxlength="500"
+      placeholder="Что угодно — о жизни, работе, играх, личном..."></textarea>
+    <button class="btn" onclick="submitQuestion()">Отправить анонимно</button>
+    <p style="margin-top:12px;color:#888;font-size:0.8rem;">
+      Вопрос появится после модерации. Твоя личность не сохраняется.
+    </p>
+  </div>
+
+  <h2>Ответы</h2>
+  <div id="questionsList">
+    <div class="empty">Загружаю...</div>
+  </div>
+</main>
+<script src="script.js"></script>
+<script>
+  async function loadQuestions() {
+    const list = document.getElementById('questionsList');
+    try {
+      const res = await fetch('/api/questions');
+      const data = await res.json();
+      if (!data.length) {
+        list.innerHTML = '<div class="empty">Пока нет вопросов. Будь первым!</div>';
+        return;
+      }
+      list.innerHTML = data.map(q => `
+        <div class="question">
+          <div>${escapeHtml(q.text)}</div>
+          ${q.reply ? `<div class="q-reply"><strong>Ответ автора:</strong>${escapeHtml(q.reply)}</div>` : ''}
+          <div class="q-meta">${new Date(q.created_at).toLocaleDateString('ru-RU')}</div>
+        </div>
+      `).join('');
+    } catch (e) {
+      list.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+    }
+  }
+
+  async function submitQuestion() {
+    const input = document.getElementById('questionInput');
+    const text = input.value.trim();
+    if (text.length < 3) { toast('Слишком короткий вопрос'); return; }
+    try {
+      const res = await fetch('/api/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      if (!res.ok) { toast('Ошибка отправки'); return; }
+      input.value = '';
+      toast('Отправлено! Появится после модерации ✌️');
+    } catch (e) {
+      toast('Ошибка сети');
+    }
+  }
+
+  loadQuestions();
+</script>
+</body>
+</html>
